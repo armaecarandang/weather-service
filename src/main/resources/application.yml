@@ -1,0 +1,11 @@
+spring:
+  config:
+    import: optional:file:./devops/local/application-local.yml
+
+weatherstack:
+  api-key:
+  base-url: http://api.weatherstack.com
+
+openweather:
+  api-key:
+  base-url: https://api.openweathermap.org
