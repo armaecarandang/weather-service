@@ -6,6 +6,8 @@ import com.armae.weather.model.WeatherResponse;
 import com.armae.weather.model.provider.weatherstack.Current;
 import com.armae.weather.model.provider.weatherstack.WeatherStackError;
 import com.armae.weather.model.provider.weatherstack.WeatherStackResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,6 +19,8 @@ import java.net.URI;
 @Component
 @Order(1)
 public class WeatherStackProvider implements WeatherProvider {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WeatherStackProvider.class);
 
     private final RestClient restClient;
     private final WeatherStackProperties properties;
@@ -44,12 +48,14 @@ public class WeatherStackProvider implements WeatherProvider {
         WeatherStackResponse response;
 
         try {
+            LOGGER.debug("Calling Weatherstack for city={}", city);
             response =
                     restClient.get()
                             .uri(uri)
                             .retrieve()
                             .body(WeatherStackResponse.class);
         } catch (RestClientException exception) {
+            LOGGER.warn("Weatherstack request failed for city={}", city, exception);
             throw new WeatherProviderException(
                     "Weather provider request failed",
                     exception);
@@ -67,10 +73,12 @@ public class WeatherStackProvider implements WeatherProvider {
             WeatherStackResponse response) {
 
         if (response == null) {
+            LOGGER.warn("Weatherstack returned an empty response");
             throw new WeatherProviderException("Weather provider returned an empty response");
         }
 
         if (Boolean.FALSE.equals(response.getSuccess()) || response.getError() != null) {
+            LOGGER.warn("Weatherstack returned an error response type={}", getErrorType(response.getError()));
             throw new WeatherProviderException(formatProviderError(response.getError()));
         }
 
@@ -80,6 +88,7 @@ public class WeatherStackProvider implements WeatherProvider {
                 || current.getTemperature() == null
                 || current.getWindSpeed() == null) {
 
+            LOGGER.warn("Weatherstack returned an incomplete response");
             throw new WeatherProviderException("Weather provider returned an incomplete response");
         }
 
@@ -102,5 +111,15 @@ public class WeatherStackProvider implements WeatherProvider {
         }
 
         return "Weather provider rejected the request";
+    }
+
+    private String getErrorType(
+            WeatherStackError error) {
+
+        if (error == null || error.getType() == null || error.getType().isBlank()) {
+            return "unknown";
+        }
+
+        return error.getType();
     }
 }

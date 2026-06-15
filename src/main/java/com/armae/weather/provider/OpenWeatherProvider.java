@@ -4,6 +4,8 @@ import com.armae.weather.config.OpenWeatherProperties;
 import com.armae.weather.exception.WeatherProviderException;
 import com.armae.weather.model.WeatherResponse;
 import com.armae.weather.model.provider.openweather.OpenWeatherResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,6 +17,8 @@ import java.net.URI;
 @Component
 @Order(2)
 public class OpenWeatherProvider implements WeatherProvider {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenWeatherProvider.class);
 
     private final RestClient restClient;
     private final OpenWeatherProperties properties;
@@ -44,12 +48,14 @@ public class OpenWeatherProvider implements WeatherProvider {
         OpenWeatherResponse response;
 
         try {
+            LOGGER.debug("Calling OpenWeatherMap for city={}", city);
             response =
                     restClient.get()
                             .uri(uri)
                             .retrieve()
                             .body(OpenWeatherResponse.class);
         } catch (RestClientException exception) {
+            LOGGER.warn("OpenWeatherMap request failed for city={}", city, exception);
             throw new WeatherProviderException(
                     "OpenWeatherMap request failed",
                     exception);
@@ -61,6 +67,7 @@ public class OpenWeatherProvider implements WeatherProvider {
                 || response.getWind() == null
                 || response.getWind().getSpeed() == null) {
 
+            LOGGER.warn("OpenWeatherMap returned an incomplete response for city={}", city);
             throw new WeatherProviderException("OpenWeatherMap returned an incomplete response");
         }
 

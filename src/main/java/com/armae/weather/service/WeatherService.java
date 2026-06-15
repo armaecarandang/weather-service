@@ -3,6 +3,8 @@ package com.armae.weather.service;
 import com.armae.weather.exception.WeatherProviderException;
 import com.armae.weather.model.WeatherResponse;
 import com.armae.weather.provider.WeatherProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class WeatherService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WeatherService.class);
 
     private final List<WeatherProvider> weatherProviders;
     private final Clock clock;
@@ -47,6 +51,8 @@ public class WeatherService {
         CachedWeather cachedWeather = cache.get(cacheKey);
 
         if (cachedWeather != null && cachedWeather.isFresh(now, cacheTtl)) {
+            LOGGER.debug("Returning fresh cached weather for city={}", cacheKey);
+
             return cachedWeather.response();
         }
 
@@ -54,22 +60,42 @@ public class WeatherService {
 
         for (WeatherProvider weatherProvider : weatherProviders) {
             try {
+                LOGGER.debug(
+                        "Requesting weather for city={} using provider={}",
+                        cacheKey,
+                        weatherProvider.getClass().getSimpleName());
+
                 WeatherResponse response = weatherProvider.getWeather(city);
                 cache.put(cacheKey, new CachedWeather(response, now));
+                LOGGER.info(
+                        "Weather lookup succeeded for city={} provider={}",
+                        cacheKey,
+                        weatherProvider.getClass().getSimpleName());
 
                 return response;
             } catch (WeatherProviderException exception) {
+                LOGGER.warn(
+                        "Weather provider failed for city={} provider={} reason={}",
+                        cacheKey,
+                        weatherProvider.getClass().getSimpleName(),
+                        exception.getMessage());
                 lastException = exception;
             }
         }
 
         if (cachedWeather != null) {
+            LOGGER.warn("Returning stale cached weather for city={} because all providers failed", cacheKey);
+
             return cachedWeather.response();
         }
 
         if (lastException != null) {
+            LOGGER.error("Weather lookup failed for city={} and no cached value is available", cacheKey);
+
             throw lastException;
         }
+
+        LOGGER.error("Weather lookup failed for city={} because no providers are configured", cacheKey);
 
         throw new WeatherProviderException("No weather providers are configured");
     }
